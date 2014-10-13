@@ -24,6 +24,7 @@ func VisitFile(fp string, fi os.FileInfo, err error) error {
 	}
 
 	if !!fi.Mode().IsDir() {
+		fmt.Println("Processing directory ",fp)
 		return nil
 	}
 
@@ -138,7 +139,8 @@ func main() {
 			panic(err)
 		}
 	}
-
+	fmt.Println("Processing ", rootDir)
+	fmt.Println("Result will output to ",fundPath)
 	filepath.Walk(rootDir, VisitFile)
 
 	ProcessResult()
