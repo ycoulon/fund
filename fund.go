@@ -2,36 +2,41 @@ package main
 
 import (
 	"bufio"
+	"container/list"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
-	"container/list"
+	"strings"
 )
-import "path"
 
 var (
 	fundPath = ""
 )
 
-func VisitFile(fp string, fi os.FileInfo, err error) error {
+func visitFile(fp string, fi os.FileInfo, err error) error {
 	if err != nil {
 		fmt.Println(err) // can't walk here,
 		return nil       // but continue walking elsewhere
 	}
 
-	if !!fi.Mode().IsDir() {
-		fmt.Println("Processing directory ",fp)
+	if strings.Contains(fp, ".fund") {
 		return nil
 	}
 
-	CalculHash(fp, fi)
+	if !!fi.Mode().IsDir() {
+		fmt.Println("Processing directory ", fp)
+		return nil
+	}
+
+	calculHash(fp, fi)
 	return nil
 }
-func CalculHash(fp string, fi os.FileInfo) {
+func calculHash(fp string, fi os.FileInfo) {
 	file, err := os.Open(fp)
 	if err != nil {
 		log.Fatal(err)
@@ -68,7 +73,6 @@ func CalculHash(fp string, fi os.FileInfo) {
 
 	}
 	hash := hex.EncodeToString(h.Sum(nil))
-
 	hashFile := path.Join(fundPath, hash)
 	if _, err := os.Stat(hashFile); os.IsNotExist(err) {
 		f, err := os.Create(hashFile)
@@ -78,17 +82,20 @@ func CalculHash(fp string, fi os.FileInfo) {
 		f.WriteString(fp + "\n")
 		f.Close()
 	} else {
-		f, err := os.OpenFile(hashFile, os.O_APPEND, 0666)
+		f, err := os.OpenFile(hashFile, os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
 			panic(err)
 		}
-		f.WriteString(fp + "\n")
+		defer f.Close()
 
-		f.Close()
+		if _, err = f.WriteString(fp + "\n"); err != nil {
+			panic(err)
+		}
+
 	}
 }
 
-func GetResult(fp string, fi os.FileInfo, err error) error {
+func getResult(fp string, fi os.FileInfo, err error) error {
 	if err != nil {
 		fmt.Println(err) // can't walk here,
 		return nil       // but continue walking elsewhere
@@ -113,8 +120,8 @@ func GetResult(fp string, fi os.FileInfo, err error) error {
 		l.PushBack(scanner.Text())
 	}
 
-	if( l.Len() >1 ) {
-	fmt.Println("Duplicate files :")
+	if l.Len() > 1 {
+		fmt.Println("Duplicate files :")
 		// Iterate through list and print its contents.
 		for e := l.Front(); e != nil; e = e.Next() {
 			fmt.Println(e.Value)
@@ -123,9 +130,9 @@ func GetResult(fp string, fi os.FileInfo, err error) error {
 	return nil
 }
 
-func ProcessResult() error {
+func processResult() error {
 	fmt.Println("Processing result...")
-	filepath.Walk(fundPath, GetResult)
+	filepath.Walk(fundPath, getResult)
 	return nil
 }
 func main() {
@@ -133,15 +140,22 @@ func main() {
 	wd, _ := os.Getwd()
 	fundPath = path.Join(wd, ".fund")
 
-	if _, err := os.Stat(fundPath); os.IsNotExist(err) {
-		err := os.Mkdir(".fund", 0755)
+	if _, err := os.Stat(fundPath); !os.IsNotExist(err) {
+		err := os.RemoveAll(fundPath)
 		if err != nil {
 			panic(err)
 		}
-	}
-	fmt.Println("Processing ", rootDir)
-	fmt.Println("Result will output to ",fundPath)
-	filepath.Walk(rootDir, VisitFile)
 
-	ProcessResult()
+	}
+
+	err := os.Mkdir(".fund", 0755)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Processing ", rootDir)
+	fmt.Println("Result will output to ", fundPath)
+	filepath.Walk(rootDir, visitFile)
+
+	processResult()
 }
